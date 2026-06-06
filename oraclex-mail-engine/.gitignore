@@ -3,3 +3,6 @@ dist/
 .wrangler/
 .dev.vars
 *.local
+
+# NEVER commit — contains live Gmail app passwords
+seed-relay.sql
