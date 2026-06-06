@@ -1,0 +1,22 @@
+{
+  "name": "oraclex-mail-engine",
+  "version": "1.0.0",
+  "description": "ORACLEX Mail Engine — Cloudflare Workers email delivery service",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute oraclex-db --file=schema.sql",
+    "db:init:remote": "wrangler d1 execute oraclex-db --remote --file=schema.sql",
+    "db:seed": "wrangler d1 execute oraclex-db --command=\"INSERT OR IGNORE INTO developers (name, api_key, status) VALUES ('ORACLEX Test', 'oraclex_live_test_key_xyz123', 'active')\"",
+    "db:seed:remote": "wrangler d1 execute oraclex-db --remote --command=\"INSERT OR IGNORE INTO developers (name, api_key, status) VALUES ('ORACLEX Test', 'oraclex_live_test_key_xyz123', 'active')\""
+  },
+  "dependencies": {
+    "handlebars": "^4.7.8",
+    "hono": "^4.6.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "wrangler": "^3.91.0"
+  }
+}
