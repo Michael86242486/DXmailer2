@@ -95,8 +95,18 @@ export interface SendEmailParams {
   data?: Record<string, string>;
 }
 
+export interface Usage {
+  emails_today: number;
+  email_quota: number;
+  remaining: number;
+  pct_used: number;
+  resets_at: string;
+  tier: string;
+}
+
 export const api = {
   getStats: () => req<Stats>("/stats"),
+  getUsage: () => req<Usage>("/usage"),
   getEmails: (params?: { status?: string; page?: number; limit?: number }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);

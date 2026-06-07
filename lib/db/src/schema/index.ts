@@ -7,6 +7,8 @@ export const usersTable = pgTable("users", {
   verified: boolean("verified").default(false).notNull(),
   otpCode: text("otp_code"),
   otpExpiresAt: integer("otp_expires_at"),
+  tier: text("tier").default("free").notNull(), // free | pro
+  emailQuota: integer("email_quota").default(100).notNull(), // daily limit
   createdAt: integer("created_at").notNull(),
 });
 
@@ -18,6 +20,8 @@ export const apiKeysTable = pgTable("api_keys", {
   keyHash: text("key_hash").notNull().unique(),
   isActive: boolean("is_active").default(true).notNull(),
   lastUsedAt: integer("last_used_at"),
+  emailsToday: integer("emails_today").default(0).notNull(),
+  quotaDate: text("quota_date").default("").notNull(), // YYYY-MM-DD
   createdAt: integer("created_at").notNull(),
 });
 
@@ -81,6 +85,17 @@ export const subscribersTable = pgTable("subscribers", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const telegramUsersTable = pgTable("telegram_users", {
+  id: serial("id").primaryKey(),
+  telegramId: text("telegram_id").notNull().unique(),
+  userId: integer("user_id").references(() => usersTable.id),
+  username: text("username"),
+  firstName: text("first_name"),
+  pendingEmail: text("pending_email"), // during signup flow
+  state: text("state").default("idle").notNull(), // idle|awaiting_password|awaiting_otp
+  createdAt: integer("created_at").notNull(),
+});
+
 export type User = typeof usersTable.$inferSelect;
 export type ApiKey = typeof apiKeysTable.$inferSelect;
 export type SmtpNode = typeof smtpPoolTable.$inferSelect;
@@ -88,3 +103,4 @@ export type OraplexEmail = typeof oraplexEmailsTable.$inferSelect;
 export type ExecStep = typeof execStepsTable.$inferSelect;
 export type Webhook = typeof webhooksTable.$inferSelect;
 export type Subscriber = typeof subscribersTable.$inferSelect;
+export type TelegramUser = typeof telegramUsersTable.$inferSelect;

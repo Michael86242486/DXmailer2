@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils";
 import Layout from "@/components/Layout";
 import {
   Send, CheckCircle2, XCircle, Clock, TrendingUp,
-  ArrowRight, Loader2, RefreshCw
+  ArrowRight, Loader2, RefreshCw, Zap, AlertTriangle
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,79 @@ const STATUS_STYLES: Record<string, string> = {
   processing: "bg-blue-500/10 text-blue-400 border-blue-500/20",
 };
 
+function UsageBar() {
+  const { data: usage, isLoading } = useQuery({
+    queryKey: ["usage"],
+    queryFn: api.getUsage,
+    refetchInterval: 10000,
+  });
+
+  const pct = usage?.pct_used ?? 0;
+  const critical = pct >= 90;
+  const warning = pct >= 70;
+
+  const barColor = critical
+    ? "bg-gradient-to-r from-red-500 to-red-400"
+    : warning
+    ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+    : "bg-gradient-to-r from-blue-500 to-violet-500";
+
+  const resets = usage?.resets_at
+    ? new Date(usage.resets_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  return (
+    <div className="bg-[#0a0a0a] border border-white/[0.07] rounded-xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Zap size={13} className="text-blue-400" />
+          <span className="text-xs font-semibold text-white">Daily Email Quota</span>
+          <span className="text-[10px] uppercase tracking-wider text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+            {usage?.tier ?? "free"}
+          </span>
+        </div>
+        <span className="text-xs text-white/30">
+          Resets at {resets} UTC
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="h-2 w-full bg-white/[0.05] rounded-full animate-pulse mb-2" />
+      ) : (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 bg-white/[0.05] rounded-full h-2 overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all duration-700", barColor)}
+                style={{ width: `${Math.min(100, pct)}%` }}
+              />
+            </div>
+            <span className={cn("text-xs font-semibold tabular-nums w-10 text-right",
+              critical ? "text-red-400" : warning ? "text-amber-400" : "text-white/60")}>
+              {pct.toFixed(0)}%
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-white/40">
+              <span className={cn("font-semibold", critical ? "text-red-400" : "text-white/70")}>{usage?.emails_today ?? 0}</span>
+              {" "}/ {usage?.email_quota ?? 100} emails used today
+            </span>
+            <span className="text-[11px] text-white/30">
+              {usage?.remaining ?? 100} remaining
+            </span>
+          </div>
+          {critical && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-red-400">
+              <AlertTriangle size={11} />
+              <span>Quota almost full — emails will be blocked at 100%</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const qc = useQueryClient();
   const { data: stats, isLoading: statsLoading } = useQuery({ queryKey: ["stats"], queryFn: api.getStats, refetchInterval: 5000 });
@@ -28,10 +101,15 @@ export default function Dashboard() {
   const [template, setTemplate] = useState("verification");
   const [code, setCode] = useState("882941");
   const [sent, setSent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const sendMut = useMutation({
     mutationFn: () => api.sendEmail({ to, template, senderName: "ORACLEX Master Control", data: { code, company: "ORACLEX Lab Ecosystem", date: "2026" } }),
-    onSuccess: (d) => { setSent(d.messageId); qc.invalidateQueries(); },
+    onSuccess: (d) => { setSent(d.messageId); setError(null); qc.invalidateQueries(); },
+    onError: (err: Error & { status?: number }) => {
+      setError(err.status === 429 ? "Daily quota exceeded — you've hit today's email limit." : err.message);
+      setSent(null);
+    },
   });
 
   const STAT_CARDS = [
@@ -48,6 +126,9 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-white mb-1">Overview</h1>
           <p className="text-sm text-white/35">ORACLEX Mail Engine · Gmail Rotation Matrix active</p>
         </div>
+
+        {/* Usage bar */}
+        <UsageBar />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -90,13 +171,21 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              {template === "verification" || template === "otp" ? (
+              {(template === "verification" || template === "otp") && (
                 <div>
                   <label className="block text-[11px] text-white/30 uppercase tracking-wider mb-1.5">Code</label>
                   <input value={code} onChange={(e) => setCode(e.target.value)}
                     className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-white/30 transition-colors font-mono" />
                 </div>
-              ) : null}
+              )}
+
+              {error && (
+                <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
+                  <AlertTriangle size={13} className="text-red-400 shrink-0" />
+                  <p className="text-xs text-red-300">{error}</p>
+                  <button onClick={() => setError(null)} className="ml-auto text-red-400/40 hover:text-red-400"><RefreshCw size={12} /></button>
+                </div>
+              )}
 
               {sent ? (
                 <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3">
@@ -109,10 +198,15 @@ export default function Dashboard() {
                     <RefreshCw size={12} />
                   </button>
                 </div>
-              ) : (
+              ) : !error ? (
                 <button onClick={() => sendMut.mutate()} disabled={sendMut.isPending || !to}
                   className="w-full bg-white text-black font-semibold text-sm py-2.5 rounded-lg hover:bg-white/90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
                   {sendMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <><Send size={13} /> Send Email</>}
+                </button>
+              ) : (
+                <button onClick={() => { setError(null); sendMut.mutate(); }} disabled={sendMut.isPending || !to}
+                  className="w-full bg-white text-black font-semibold text-sm py-2.5 rounded-lg hover:bg-white/90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+                  {sendMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <><RefreshCw size={13} /> Try again</>}
                 </button>
               )}
             </div>

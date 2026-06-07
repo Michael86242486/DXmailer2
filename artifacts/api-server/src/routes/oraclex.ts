@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import { db } from "@workspace/db";
 import {
   smtpPoolTable, oraplexEmailsTable, execStepsTable,
-  webhooksTable, subscribersTable, apiKeysTable,
+  webhooksTable, subscribersTable, apiKeysTable, usersTable,
 } from "@workspace/db";
 import { eq, and, lt, asc, desc, ilike, sql } from "drizzle-orm";
 import { hashApiKey } from "../lib/auth.js";
@@ -41,6 +41,23 @@ async function authMiddleware(req: Request, res: Response, next: () => void) {
 
   (req as Request & { userId: number }).userId = keys[0].userId;
   next();
+}
+
+// ─── Flexible auth: API key OR internal X-Internal-User-Id header (Telegram bot) ──
+async function authMiddlewareFlexible(req: Request, res: Response, next: () => void) {
+  // Internal bypass from Telegram bot's /send playground
+  const internalUserId = req.headers["x-internal-user-id"] as string | undefined;
+  if (internalUserId) {
+    const uid = parseInt(internalUserId, 10);
+    if (!isNaN(uid) && uid > 0) {
+      // Verify the user exists and is verified
+      const users = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, uid)).limit(1);
+      if (users.length) { (req as Request & { userId: number }).userId = uid; next(); return; }
+    }
+    res.status(401).json({ error: "Invalid internal user" }); return;
+  }
+  // Fall back to standard API key auth
+  await authMiddleware(req, res, next);
 }
 
 // ─── LRU smtp node selection ──────────────────────────────────────────────────
@@ -107,12 +124,25 @@ async function deliverEmail(
       greetingTimeout: 10000,
     });
 
+    const domain = node.email.split("@")[1] ?? "gmail.com";
+    const rfcMessageId = `<${messageId}@${domain}>`;
+    const textBody = buildText(template, data);
     await transporter.sendMail({
       from: `"${fromName}" <${node.email}>`,
+      replyTo: `"${fromName}" <noreply@${domain}>`,
       to,
       subject,
       html,
-      headers: { "X-ORACLEX-Message-ID": messageId, "X-ORACLEX-Template": template },
+      text: textBody,
+      messageId: rfcMessageId,
+      headers: {
+        "Precedence": "transactional",
+        "X-Mailer": "ORACLEX Mail Engine v2",
+        "X-Entity-Ref-ID": messageId,
+        "X-ORACLEX-Template": template,
+        "List-Unsubscribe": `<mailto:unsubscribe@${domain}?subject=unsubscribe>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     });
 
     await db.update(smtpPoolTable).set({ dailySentCount: node.dailySentCount + 1, lastUsedTimestamp: now() }).where(eq(smtpPoolTable.id, node.id));
@@ -127,6 +157,19 @@ async function deliverEmail(
     broadcast("failed", { messageId, to, template, reason: msg.slice(0, 200), emailId });
     fireWebhooks(userId, "failed", { messageId, reason: msg.slice(0, 200) });
   }
+}
+
+// ─── Plain-text builder (critical for deliverability / spam avoidance) ────────
+function buildText(template: string, data: Record<string, unknown>): string {
+  const company = (data.company as string) || "ORACLEX";
+  const code = data.code as string | undefined;
+  const texts: Record<string, string> = {
+    verification: `Verify your ${company} account\n\nYour verification code: ${code ?? ""}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.\n\n--\nSent by ORACLEX Mail Engine`,
+    otp: `Your one-time password\n\n${code ?? ""}\n\nThis code expires in 5 minutes.\n\n--\nSent by ORACLEX Mail Engine`,
+    "password-reset": `Reset your ${company} password\n\nReset link: ${data.resetUrl ?? "(see HTML version)"}\n\n--\nSent by ORACLEX Mail Engine`,
+    "magic-link": `Sign in to ${company}\n\nSign-in link: ${data.magicUrl ?? "(see HTML version)"}\n\nThis link expires in 15 minutes.\n\n--\nSent by ORACLEX Mail Engine`,
+  };
+  return texts[template] ?? "Message from ORACLEX";
 }
 
 // ─── HTML builder ─────────────────────────────────────────────────────────────
@@ -203,7 +246,7 @@ router.get("/v1/stream", authSse, (req: Request, res: Response) => {
 });
 
 // POST /api/v1/email/send
-router.post("/v1/email/send", (req, res, next) => { void authMiddleware(req, res, next); }, (req: Request, res: Response) => {
+router.post("/v1/email/send", (req, res, next) => { void authMiddlewareFlexible(req, res, next); }, (req: Request, res: Response) => {
   const userId = (req as Request & { userId: number }).userId;
   const { to, template, senderName, data } = req.body ?? {};
   if (!to || !template) { res.status(400).json({ error: "Missing required fields: to, template" }); return; }
@@ -211,6 +254,17 @@ router.post("/v1/email/send", (req, res, next) => { void authMiddleware(req, res
 
   const messageId = randomUUID();
   void (async () => {
+    // ── Rate limiting: check daily quota ─────────────────────────────────────
+    const users = await db.select({ emailQuota: usersTable.emailQuota }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    const quota = users[0]?.emailQuota ?? 100;
+    const startOfDay = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+    const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` }).from(oraplexEmailsTable)
+      .where(and(eq(oraplexEmailsTable.userId, userId), sql`queued_at >= ${startOfDay}`));
+    if ((cnt ?? 0) >= quota) {
+      res.status(429).json({ error: "Daily email quota exceeded", quota, used: cnt, resets_at: "midnight UTC" });
+      return;
+    }
+
     const [inserted] = await db.insert(oraplexEmailsTable).values({
       messageId, userId, toAddress: to, template, senderName, data: JSON.stringify(data ?? {}),
       status: "queued", queuedAt: now(),
@@ -218,9 +272,23 @@ router.post("/v1/email/send", (req, res, next) => { void authMiddleware(req, res
     await addExec(inserted.id, "queued", `Email accepted (${to}) · template: ${template}`);
     broadcast("queued", { messageId, to, template, emailId: inserted.id });
     void deliverEmail(inserted.id, userId, to, template, senderName, data ?? {}, messageId);
-  })();
 
-  res.status(202).json({ messageId, status: "queued" });
+    res.status(202).json({ messageId, status: "queued" });
+  })();
+});
+
+// GET /api/v1/usage
+router.get("/v1/usage", (req, res, next) => { void authMiddlewareFlexible(req, res, next); }, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: number }).userId;
+  const users = await db.select({ emailQuota: usersTable.emailQuota, tier: usersTable.tier }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const quota = users[0]?.emailQuota ?? 100;
+  const startOfDay = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+  const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` }).from(oraplexEmailsTable)
+    .where(and(eq(oraplexEmailsTable.userId, userId), sql`queued_at >= ${startOfDay}`));
+  const used = cnt ?? 0;
+  const remaining = Math.max(0, quota - used);
+  const tomorrow = new Date(); tomorrow.setUTCHours(24, 0, 0, 0);
+  res.json({ emails_today: used, email_quota: quota, remaining, pct_used: parseFloat(((used / quota) * 100).toFixed(1)), resets_at: tomorrow.toISOString(), tier: users[0]?.tier ?? "free" });
 });
 
 // GET /api/v1/stats

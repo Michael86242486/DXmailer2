@@ -3,22 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>ORACLEX Dashboard</title>
-    <meta name="description" content="ORACLEX Dashboard — built on Replit. Update this description to reflect the app." />
+    <title>ORACLEX — Transactional Email Engine</title>
+    <meta name="description" content="ORACLEX Mail Engine — Send transactional emails via Gmail rotation matrix. Resend-compatible API." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="ORACLEX Dashboard" />
-    <meta property="og:description" content="ORACLEX Dashboard — built on Replit. Update this description to reflect the app." />
+    <meta property="og:title" content="ORACLEX Mail Engine" />
+    <meta property="og:description" content="Send transactional emails in 3 lines of code. Gmail rotation matrix, real-time delivery tracking, API key management." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="ORACLEX Dashboard" />
-    <meta name="twitter:description" content="ORACLEX Dashboard — built on Replit. Update this description to reflect the app." />
+    <meta name="twitter:title" content="ORACLEX Mail Engine" />
+    <meta name="twitter:description" content="Send transactional emails in 3 lines of code." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* Hide Replit badge */
+      [data-replit-badge], #replit-badge, .replit-badge,
+      iframe[src*="replit.com/badge"], a[href*="replit.com/badge"],
+      div[class*="replit"], div[id*="replit-badge"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Aggressively remove Replit badge once DOM is ready
+      function removeReplitBadge() {
+        const selectors = ['[data-replit-badge]','#replit-badge','.replit-badge','iframe[src*="replit"]'];
+        selectors.forEach(s => { try { document.querySelectorAll(s).forEach(el => el.remove()); } catch(_) {} });
+      }
+      document.addEventListener('DOMContentLoaded', removeReplitBadge);
+      setTimeout(removeReplitBadge, 500);
+      setTimeout(removeReplitBadge, 2000);
+      const obs = new MutationObserver(removeReplitBadge);
+      document.addEventListener('DOMContentLoaded', () => obs.observe(document.body, { childList: true, subtree: true }));
+    </script>
   </body>
 </html>
