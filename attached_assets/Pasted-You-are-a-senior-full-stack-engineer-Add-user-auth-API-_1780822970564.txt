@@ -1,0 +1,58 @@
+You are a senior full-stack engineer. Add user auth + API key management to ORACLEX Express server on Replit.
+
+MISSION: Build dashboard like screenshot - signup/login + API keys page + Swagger docs.
+
+DATABASE: Use SQLite with better-sqlite3. Tables:
+1. users: id, email, password_hash, created_at
+2. api_keys: id, user_id, key_prefix, key_hash, name, created_at, last_used_at, is_active
+3. email_logs: id, user_id, to_email, template, status, created_at
+
+BUILD TASKS:
+
+1. AUTH SYSTEM
+- POST /api/auth/signup - email + password → hash with bcrypt → save user
+- POST /api/auth/login - email + password → return JWT token
+- GET /api/auth/me - verify JWT → return user info
+- Middleware: requireAuth for protected routes
+
+2. API KEYS DASHBOARD UI
+Create /dashboard route with React/HTML. Make it look EXACTLY like screenshot:
+- Left sidebar: Emails, Broadcasts, Templates, API keys, Logs, Settings
+- Main page /dashboard/api-keys: "API keys" title + "No API keys yet" empty state
+- Button: "+ Create API key" → generates key like oraclex_live_abc123xyz
+- Table: Show key_prefix "oraclex_live_abc..." + created date + last used + revoke button
+- Only show full key ONCE after creation, then hide. Store hash only.
+
+3. API KEY LOGIC
+- Generate keys: oraclex_live_ + random 24 chars
+- Save only SHA256 hash in DB, show full key once to user
+- Middleware: check Bearer token against api_keys table → attach user_id to request
+- Update last_used_at on every API call
+
+4. PROTECTED API ROUTES
+Update existing ORACLEX routes to require API key:
+POST /api/v1/email/send → require Bearer token
+GET /api/v1/stats → require Bearer token, filter by user_id
+GET /api/v1/email/logs → require Bearer token, filter by user_id
+
+5. SWAGGER DOCS
+- /api/docs - Swagger UI
+- /api/openapi.json - OpenAPI spec with BearerAuth security
+- Add "Authorize" button in Swagger for users to paste API key
+
+6. UI/UX
+- Dark theme, clean, responsive
+- Remove Replit badge: add hideReplitBadge = true in .replit file
+- Show user email in top-right after login
+
+FILES TO CREATE/EDIT:
+server.js - add auth routes + middleware
+db.js - SQLite setup + tables
+auth.js - JWT + bcrypt helpers
+apiKeys.js - generate + verify keys
+dashboard.html - full dashboard UI matching screenshot
+swagger.js - Swagger setup
+
+SECURITY: Passwords bcrypt 10 rounds. JWT secret from env. API keys sha256 hash.
+
+DELIVER: Run server, test signup → login → create API key → use key in Swagger "Try it out"

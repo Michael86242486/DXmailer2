@@ -1,0 +1,62 @@
+Add a new "Developer Docs" page to ORACLEX that teaches users how to integrate the API.
+
+REQUIREMENTS:
+
+1. ROUTE + NAV
+Create /docs route. Add "Docs" link in navbar next to Dashboard, next to Pricing.
+Mobile responsive.
+
+2. PAGE STRUCTURE - Use tabs or sections:
+Section 1: Quick Start
+- 3 steps: 1. Get API Key 2. Install SDK 3. Send first email
+- Show API key copy button from user dashboard
+- Code block with curl example
+
+Section 2: API Reference
+- POST https://your-replit-url/api/send-email
+- Headers table: Content-Type, x-api-key
+- Body JSON schema table with fields: to, subject, html, from(optional)
+- Example request + example response 200 OK + example error 401
+- Add "Try it" button that prefills curl command with user API key
+
+Section 3: Code Examples
+Create 4 tabs with full code:
+Tab 1: Node.js - using fetch + async/await
+Tab 2: Python - using requests library  
+Tab 3: PHP - using cURL
+Tab 4: Next.js API Route - show how to call ORACLEX from /api/send route
+Each code block has "Copy" button
+
+Section 4: Integration Guides with Images
+Add placeholder images and write guides for:
+1. "Integrate with Contact Form" - show HTML form + JS fetch code + screenshot of email received
+2. "Integrate with Next.js App" - show folder structure + API route code + screenshot
+3. "Integrate with WordPress" - show PHP snippet for functions.php
+For each guide: write steps 1-2-3, show code, add [IMAGE_PLACEHOLDER: description of screenshot]
+
+Section 5: Error Codes
+Table: 401 Unauthorized, 429 Rate Limit, 500 Server Error. Show what each means + how to fix.
+
+Section 6: Rate Limits + Pricing
+Free: 100 emails/day. Pro: 10k/day. Show table.
+
+3. DESIGN
+- Use same theme as ORACLEX dashboard
+- Code blocks with syntax highlighting, dark theme
+- Sticky sidebar nav on desktop: Quick Start, API Reference, Examples, Guides, Errors
+- Add "Copy code" button to all code blocks
+- Add "Was this helpful?" thumbs up/down at bottom
+
+4. DATA
+Pull user API key from logged in user session. If not logged in, show "Login to see your API key" button.
+Auto-insert user API key into all code examples.
+
+5. SEO
+Add title: "ORACLEX API Docs - Send Emails in 3 Lines of Code"
+Add meta description.
+
+FILES TO MODIFY/CREATE: 
+- /docs page component
+- Update navbar
+- Create /components/CodeBlock.jsx with copy button
+- Add API endpoint GET /api/user/apikey to fetch current user key
