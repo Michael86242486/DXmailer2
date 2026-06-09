@@ -28,6 +28,10 @@ localPort = 8081
 externalPort = 80
 
 [[ports]]
+localPort = 8082
+externalPort = 3001
+
+[[ports]]
 localPort = 18399
 externalPort = 3000
 
@@ -35,3 +39,6 @@ externalPort = 3000
 
 [userenv.shared]
 TELEGRAM_BOT_TOKEN = "8613612129:AAEN_SVa9lCA-iSVY2df7CXZ0rd40sT48OE"
+ADMIN_BOT_TOKEN = "8313952077:AAH9_JNTLtFglWa3K_3taX9YcFZLPGAu1mk"
+AIMODELAPI_KEY = "devx-jil1s5favekhajvjsm75vahuqmw1mcna"
+AIMODELAPI_BASE = "https://aimodelapi.onrender.com/v1"
